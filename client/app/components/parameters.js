@@ -1,53 +1,8 @@
-import { includes, words, capitalize, extend } from 'lodash';
+import { extend } from 'lodash';
 import template from './parameters.html';
-import parameterSettingsTemplate from './parameter-settings.html';
+import EditParameterSettingsDialog from './EditParameterSettingsDialog';
 
-function humanize(str) {
-  return capitalize(words(str).join(' '));
-}
-
-const ParameterSettingsComponent = {
-  template: parameterSettingsTemplate,
-  bindings: {
-    resolve: '<',
-    close: '&',
-    dismiss: '&',
-  },
-  controller($sce, Query) {
-    'ngInject';
-
-    this.trustAsHtml = html => $sce.trustAsHtml(html);
-    this.parameter = this.resolve.parameter;
-    this.isNewParameter = this.parameter.name === '';
-    this.shouldGenerateTitle = this.isNewParameter && this.parameter.title === '';
-
-    this.parameterAlreadyExists = name => includes(this.resolve.existingParameters, name);
-
-    if (this.parameter.queryId) {
-      Query.get({ id: this.parameter.queryId }, (query) => {
-        this.queries = [query];
-      });
-    }
-
-    this.searchQueries = (term) => {
-      if (!term || term.length < 3) {
-        return;
-      }
-
-      Query.query({ q: term }, (results) => {
-        this.queries = results.results;
-      });
-    };
-
-    this.updateTitle = () => {
-      if (this.shouldGenerateTitle) {
-        this.parameter.title = humanize(this.parameter.name);
-      }
-    };
-  },
-};
-
-function ParametersDirective($location, $uibModal) {
+function ParametersDirective($location) {
   return {
     restrict: 'E',
     transclude: true,
@@ -56,6 +11,7 @@ function ParametersDirective($location, $uibModal) {
       syncValues: '=?',
       editable: '=?',
       changed: '&onChange',
+      saveQuery: '<',
     },
     template,
     link(scope) {
@@ -77,13 +33,16 @@ function ParametersDirective($location, $uibModal) {
         );
       }
 
-      scope.showParameterSettings = (param) => {
-        $uibModal.open({
-          component: 'parameterSettings',
-          resolve: {
-            parameter: param,
-          },
-        });
+      scope.showParameterSettings = (parameter, index) => {
+        EditParameterSettingsDialog
+          .showModal({
+            parameter,
+            onConfirm: newParameter => new Promise((resolve) => {
+              scope.parameters[index] = extend(parameter, newParameter);
+              scope.saveQuery();
+              resolve();
+            }),
+          });
       };
     },
   };
@@ -91,7 +50,6 @@ function ParametersDirective($location, $uibModal) {
 
 export default function init(ngModule) {
   ngModule.directive('parameters', ParametersDirective);
-  ngModule.component('parameterSettings', ParameterSettingsComponent);
 }
 
 init.init = true;
