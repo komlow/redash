@@ -82,7 +82,7 @@ function QuerySourceCtrl(
           type: 'text',
           value: null,
         },
-        existingParameters: () => map($scope.query.getParameters().get(), p => p.name),
+        existingParams: map($scope.query.getParameters().get(), p => p.name),
       })
       .result.then((param) => {
         param = $scope.query.getParameters().add(param);
