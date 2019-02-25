@@ -84,13 +84,15 @@ function EditParameterSettingsDialog(props) {
     }
   }, []);
 
+  // keep name in sync
+  useEffect(() => {
+    setParam({ ...param, name: newName });
+  }, [newName]);
+
   const onSaveClicked = () => {
-    // update name and title
-    if (isNew) {
-      param.name = newName;
-      if (!param.title) {
-        param.title = getDefaultTitle(newName);
-      }
+    // update title to default
+    if (!param.title) {
+      param.title = getDefaultTitle(param.name);
       setParam(param);
     }
 
