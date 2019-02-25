@@ -13,7 +13,6 @@ import { Query } from '@/services/query';
 const { Option } = Select;
 const formItemProps = { labelCol: { span: 6 }, wrapperCol: { span: 16 } };
 
-// custom query search hook
 function useQuerySearch() {
   const [searchTerm, setSearchTerm] = useState(); // search term
   const [searchResults, setSearchResults] = useState([]); // search results
@@ -31,11 +30,10 @@ function useQuerySearch() {
   return [searchResults, setSearchResults, setSearchTerm];
 }
 
-// save param
-function useParamSave() {
+function useParamSave(onConfirm, onClose) {
   const [saving, setSaving] = useState(false);
 
-  const save = (param, onConfirm, onClose) => {
+  const save = (param) => {
     setSaving(true);
     onConfirm(param)
       .then(() => {
@@ -52,11 +50,29 @@ function getDefaultTitle(text) {
   return capitalize(words(text).join(' ')); // humanize
 }
 
+function useNewName(existingParams) {
+  const [name, setName] = useState('');
+  const [feedback, setFeedback] = useState({ isError: false, text: null });
+
+  useEffect(() => {
+    const alreadyExists = includes(existingParams, name);
+    if (alreadyExists) {
+      setFeedback({ isError: true, helpText: 'Parameter with this name already exists' });
+    } else if (!name) {
+      setFeedback({ isError: false, helpText: 'Choose a keyword for this parameter' });
+    } else {
+      setFeedback({ isError: false, helpText: `This is what will be added to your query editor {{ ${name} }}` });
+    }
+  }, [name]);
+
+  return [feedback, name, setName];
+}
+
 function EditParameterSettingsDialog(props) {
   const [param, setParam] = useState(clone(props.parameter));
   const [querySearchResults, setQuerySearchResults, setQuerySearchTerm] = useQuerySearch();
-  const [error, setError] = useState(null);
-  const [saving, save] = useParamSave(props, param);
+  const [newNameFeedback, newName, setNewName] = useNewName(props.existingParams);
+  const [saving, save] = useParamSave(props.onConfirm, props.dialog.close);
   const isNew = !props.parameter.name;
 
   // get query name by id
@@ -68,52 +84,45 @@ function EditParameterSettingsDialog(props) {
     }
   }, []);
 
-  // set name with validation
-  const setName = (name) => {
-    const err = includes(props.existingParams, name) ? 'Parameter with this name already exists' : null;
-    setError(err);
-    setParam({ ...param, name });
-  };
-
-  // name
-  const renderNameFormItem = () => {
-    const help = name
-      ? `This is what will be added to your query editor {{ ${param.name} }}`
-      : 'Choose a keyword for this parameter';
-
-    return (
-      <Form.Item label="Keyword" help={error || help} validateStatus={error && 'error'} required {...formItemProps}>
-        <Input onChange={e => setName(e.target.value)} />
-      </Form.Item>
-    );
-  };
-
   const onSaveClicked = () => {
-    // set title to name by default
-    if (!param.title) {
-      param.title = getDefaultTitle(param.name); // this is to avoid a force update...
+    // update name and title
+    if (isNew) {
+      param.name = newName;
+      if (!param.title) {
+        param.title = getDefaultTitle(newName);
+      }
       setParam(param);
     }
 
-    save(param, props.onConfirm, props.dialog.close);
+    save(param);
   };
 
   return (
     <Modal
       {...props.dialog.props}
-      title={isNew ? 'Add Parameter' : param.name}
+      title={isNew ? 'Add Parameter' : newName}
       onOk={onSaveClicked}
       okText={isNew ? 'Add Parameter' : 'Save'}
       okButtonProps={{
         loading: saving,
-        disabled: error || !param.name || param.title === '',
+        disabled: isNew && (newNameFeedback.isError || !newName) || param.title === '',
       }}
     >
       <Form layout="horizontal">
-        {isNew && renderNameFormItem()}
+        {isNew && (
+          <Form.Item
+            required
+            label="Keyword"
+            help={newNameFeedback.text}
+            validateStatus={newNameFeedback.isError ? 'error' : ''}
+            {...formItemProps}
+          >
+            <Input onChange={e => setNewName(e.target.value)} />
+          </Form.Item>
+        )}
         <Form.Item label="Title" {...formItemProps}>
           <Input
-            value={isNull(param.title) ? getDefaultTitle(param.name) : param.title}
+            value={isNull(param.title) ? getDefaultTitle(newName) : param.title}
             onChange={e => setParam({ ...param, title: e.target.value })}
           />
         </Form.Item>
