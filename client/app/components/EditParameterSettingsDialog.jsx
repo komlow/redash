@@ -50,29 +50,46 @@ function getDefaultTitle(text) {
   return capitalize(words(text).join(' ')); // humanize
 }
 
-function useNewName(existingParams) {
-  const [name, setName] = useState('');
-  const [feedback, setFeedback] = useState({ isError: false, text: null });
+function NameInput({ name, onChange, existingParams, setValidation }) {
+  const alreadyExists = includes(existingParams, name);
+  let helpText = 'Choose a keyword for this parameter';
 
-  useEffect(() => {
-    const alreadyExists = includes(existingParams, name);
-    if (alreadyExists) {
-      setFeedback({ isError: true, helpText: 'Parameter with this name already exists' });
-    } else if (!name) {
-      setFeedback({ isError: false, helpText: 'Choose a keyword for this parameter' });
-    } else {
-      setFeedback({ isError: false, helpText: `This is what will be added to your query editor {{ ${name} }}` });
-    }
-  }, [name]);
+  if (alreadyExists) {
+    helpText = 'Parameter with this name already exists';
+    setValidation(false);
+  } else if (!name) {
+    helpText = 'Choose a keyword for this parameter';
+    setValidation(false);
+  } else {
+    helpText = `This is what will be added to your query editor {{ ${name} }}`;
+    setValidation(true);
+  }
 
-  return [feedback, name, setName];
+  return (
+    <Form.Item
+      required
+      label="Keyword"
+      help={helpText}
+      validateStatus={alreadyExists ? 'error' : ''}
+      {...formItemProps}
+    >
+      <Input onChange={e => onChange(e.target.value)} />
+    </Form.Item>
+  );
 }
+
+NameInput.propTypes = {
+  name: PropTypes.string.isRequired,
+  onChange: PropTypes.func.isRequired,
+  existingParams: PropTypes.arrayOf(PropTypes.string).isRequired,
+  setValidation: PropTypes.func.isRequired,
+};
 
 function EditParameterSettingsDialog(props) {
   const [param, setParam] = useState(clone(props.parameter));
   const [querySearchResults, setQuerySearchResults, setQuerySearchTerm] = useQuerySearch();
-  const [newNameFeedback, newName, setNewName] = useNewName(props.existingParams);
   const [saving, save] = useParamSave(props.onConfirm, props.dialog.close);
+  const [isNameValid, setIsNameValid] = useState(true);
   const isNew = !props.parameter.name;
 
   // get query name by id
@@ -84,10 +101,6 @@ function EditParameterSettingsDialog(props) {
     }
   }, []);
 
-  // keep name in sync
-  useEffect(() => {
-    setParam({ ...param, name: newName });
-  }, [newName]);
 
   const onSaveClicked = () => {
     // update title to default
@@ -102,29 +115,26 @@ function EditParameterSettingsDialog(props) {
   return (
     <Modal
       {...props.dialog.props}
-      title={isNew ? 'Add Parameter' : newName}
+      title={isNew ? 'Add Parameter' : param.name}
       onOk={onSaveClicked}
       okText={isNew ? 'Add Parameter' : 'Save'}
       okButtonProps={{
         loading: saving,
-        disabled: isNew && (newNameFeedback.isError || !newName) || param.title === '',
+        disabled: !isNameValid || param.title === '',
       }}
     >
       <Form layout="horizontal">
         {isNew && (
-          <Form.Item
-            required
-            label="Keyword"
-            help={newNameFeedback.text}
-            validateStatus={newNameFeedback.isError ? 'error' : ''}
-            {...formItemProps}
-          >
-            <Input onChange={e => setNewName(e.target.value)} />
-          </Form.Item>
+          <NameInput
+            existingParams={props.existingParams}
+            onChange={name => setParam({ ...param, name })}
+            name={param.name}
+            setValidation={setIsNameValid}
+          />
         )}
         <Form.Item label="Title" {...formItemProps}>
           <Input
-            value={isNull(param.title) ? getDefaultTitle(newName) : param.title}
+            value={isNull(param.title) ? getDefaultTitle(param.name) : param.title}
             onChange={e => setParam({ ...param, title: e.target.value })}
           />
         </Form.Item>
